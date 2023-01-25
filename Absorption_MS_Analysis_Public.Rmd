@@ -542,76 +542,7 @@ absorbed_factors_wide<-absorbed_factors%>%
 df.full<-df.full%>%full_join(absorbed_factors_wide, by="Pt_ID")
 ```
 
-## PCA
-The PCA results are not included in the manuscript or in the supplementary material.
-
-"An alternative to factor analysis, which is unfortunately frequently confused with factor analysis, is principal components analysis. Although the goals of PCA and FA are similar, PCA is a descriptive model of the data, while FA is a structural model. Psychologists typically use PCA in a manner similar to factor analysis and thus the principal function produces output that is perhaps more understandable than that produced by princomp in the stats package…
-
-Note how the loadings from the factor model are similar but smaller than the principal component loadings. This is because the PCA model attempts to account for the entire variance of the correlation matrix, while FA accounts for just the common variance. This distinction becomes most important for small correlation matrices. Also note how the goodness of fit statistics, based upon the residual off diagonal elements, is much worse than the fa solution."
-
-```{r}
-absorption_PCA<-principal(df_absorb, rotate = "oblimin") #An oblimin rotation was employed for the principal component analysis because we have reason to believe that the components of the subscales will correlate.
-absorption_PCA
-```
-
-```{r}
-#2) Report the number of components with eigenvalues greater than 1: There are 3 transformed components with eigenvalues greater than 1 (TC1 = 2.85, TC2 = 1.98, TC3= 1.20).
-cat("Eigen values\n")
-```
-
-```{r}
-print(absorption_PCA$values)
-```
-
-```{r}
-# You can also assess which components/factors to keep based on a Scree plot.
-plot(absorption_PCA$values, type = "b", xlab = "Factors", ylab = "Eigen values", main="SCREE PLOT") # Keep factors before the flat line (in this case: 1, 2, and 3)
-```
-
-```{r}
-# 3) Define the number of factors and re-run based on the retained factors: We re-ran the principal component analysis based on the two retained factors.
-absorption_PCA_3<-principal(df_absorb, nfactors = 3, rotate = "oblimin")
-
-# 4) Report the amount of variance explained (cumulative): The first transformed component explained 26% of the variance, the second component explained 21% of the variance, and the third component explained 14% of the variance, therefore the cumulative variance explained was 60%. 
-absorption_PCA_3
-```
-
-5) Report the items that fit into each component by setting a threshold of +/-0.4: 
-    With a cutoff threshold of 0.4, the items that load onto the first transformed component are "Absorbed in the Music" (0.85),"Lost Sense of Time"(0.70), "Positively Transformed" (0.70), and "Distracted" loaded negatively (-0.43). The items that load onto the second transformed component are "absorbed in your own world" (0.82), "Daydream" (0.82), "Distracted" (0.53), and "Attention to Yourself and Physical Sensations" (0.43). The items that load onto the third transformed component are "Attention Others" (0.87) and "Attention to Yourself and Physical Sensations" (0.47).
-
-Note: TC stands for transformed components because they were rotated with the oblimin method.
-
-## Item Cluster Analysis: iclust
-The item cluster analysis results are not included in the manuscript or in the supplementary material.
-
-Note: “iclust is meant to do item cluster analysis using a hierarchical clustering algorithm specifically asking questions about the reliability of the clusters (Revelle, 1979). Clusters are formed until either coefficient α Cronbach (1951) or β Revelle (1979) fail to increase.”
-
-“1. Find the proximity (e.g. correlation) matrix, 2. Identify the most similar pair of items 3. Combine this most similar pair of items to form a new variable (cluster), 4. Find the similarity of this cluster to all other items and clusters, 5. Repeat steps 2 and 3 until some criterion is reached (e.g., typicallly, if only one cluster remains or in iclust if there is a failure to increase reliability coefficients α or β). 6. Purify the solution by reassigning items to the most similar cluster center”
-
-```{r}
-ic<-iclust(df_absorb)
-ic
-summary(ic)
-```
-
-## Comparing FA, PCA, Cluster solutions
-“Cluster analysis, factor analysis, and principal components analysis all produce structure matrices (matrices of correlations between the dimensions and the variables) that can in turn be compared in terms of the congruence coefficient which is just the cosine of the angle between the dimensions”
-
-```{r}
-factor.congruence(list(absorption_factor_analysis_3,absorption_factor_analysis_4,absorption_PCA_3, ic))
-```
-
-### bassAckward
-“Factor congruences may be found between any two sets of factor loadings. If given the same data set/correlation matrix, factor correlations may be found using faCor which finds the correlations between the factors. This procedure is also used in the bassAckward function which compares multiple solutions with a different number of factors.”
-
-“bassAckward compares solutions at multiple levels by successive factoring and the finding the factor correlations across levels.”
-
-```{r}
-bA<-bassAckward(df_absorb, nfactors = 3)
-summary(bA)
-```
-
-# Repeated Measures Correlations
+# 3.3 Repeated Measures Correlations
 Section 3.3 What is the relation between absorption in the music, the other scale factors, and other affective variables?
 
 Correlations between variables by piece needs to be conducted with a repeated measures approach because we measured the scales after Beethoven, Schnittke, and the Folk (3 times)
@@ -1253,133 +1184,6 @@ summary(m1)
 # 3.5.1 Absorption ~ Group + Piece
 3.5 What is the influence of social context (group: Live, Livestreaming) and the piece of music (Beethoven, Schnittke, Folk) on musical absorption and mind-wandering?
 
-## Linear mixed effects modeling
-1) Organize the data
-```{r}
-dat<-df.full%>%select(Pt_ID, group,contains("Absorption"))
-
-df.long<-dat%>%pivot_longer(!c(group, Pt_ID), #make long
-                            names_to = c("piece"),
-                            names_pattern ="_(.*)",
-                            values_to = "Absorption")
-
-df.long<-df.long%>%filter(! piece == "Bach")
-
-df.long$piece<-factor(df.long$piece, levels = c("Beethoven", "Schnittke", "Bach", "Folk"))
-#factor for the correct facet order
-
-data<-df.long%>%drop_na() #408 to 359
-```
-
-### Outliers
-Remove extreme outliers from Absorption measure. None are extreme.
-```{r}
-outliers<-data %>%
-  group_by(group, piece) %>%
-  identify_outliers(Absorption)
-
-outliers # 1; None are extreme.
-
-extreme<-outliers%>%filter(is.extreme == TRUE)
-
-extreme # none are extreme
-
-# remove specific instances that are outliers (Pt_ID and piece, because lme can handle missing data so you don't need to remove the whole participant)
-
-# data uten outliers
-data_u_outliers<-data%>% # 359 to 358 : looks good!
-  group_by(group, piece) %>%
-  filter(!is_outlier(Absorption))%>%
-  ungroup()
-
-# data uten extreme  
-data_u_extreme<-data%>% # 359 to 359 : looks good!
-  group_by(group, piece) %>%
-  filter(!is_extreme(Absorption))%>%
-  ungroup()
-```
-
-### Model testing
-Andy Field wrote a textbook titled Discovering Statistics using R. In chapter 14, he covers the topic of mixed designs (GLM 5) and explains how to use nlme to analyse a mixed design. I will use the information presented in the textbook as an approach for examining the influence of piece (repeated measures: factor) and group (between subjects: factor) on musical absorption (continuous).
-
-With  random intercept of Pt_ID (as opposed to Pt_ID nested in piece)
-```{r}
-nl_baseline<-lme(Absorption ~ 1, random = ~1|Pt_ID, data = data, method = "ML") # ML = maximum likelihood estimate
-nl_groupM<-update(nl_baseline, .~. +group) # sig
-nl_pieceM<-update(nl_groupM, .~. +piece) # sig
-nl_group_piece<-update(nl_pieceM, .~. +group:piece) # NS
-anova(nl_baseline, nl_groupM, nl_pieceM, nl_group_piece)
-#summary(nl_pieceM)
-
-## With lme4
-### data_uten_extreme is the exact same data set so it is fine to use data here.
-baseline<-lmer(Absorption ~ 1 + (1|Pt_ID), data = data, REML = FALSE) # ML = maximum likelihood estimate
-groupM<-lmer(Absorption ~ group + (1|Pt_ID), data = data, REML = FALSE) # ML = maximum likelihood estimate
-pieceM<-lmer(Absorption ~ group + piece + (1|Pt_ID), data = data, REML = FALSE) # ML = maximum likelihood estimate
-piece_x_groupM<-lmer(Absorption ~ group * piece + (1|Pt_ID), data = data, REML = FALSE) # ML = maximum likelihood estimate
-anova(baseline, groupM, pieceM, piece_x_groupM)
-```
-
-There were significant main effects of group, X2(1) = 7.70, p = .006, and piece, X2(2) = 18.13, p .0001, on musical absorption. However there was no significant interaction effect between group and piece, X2(2) = .09, p = .95.
-
-#### Check model assumptions
-What are the assumptions of lme and how to check them?
-They are the same as linear regression in general and include:
-1) explanatory variables are related linearly to the response. In my case, my vars are not continuous and thus maybe a mixed anova would be better for explaining things anyways. However it is OK to dummy code and do a multilevel modeling approach.
-2) errors have a constant variance
-3) errors are independent
-4) errors are normally distributed
-
-"check the assumptions that the 1) errors are normally distributed and that the 2) random effects are normally distributed"
-
-Here is a tutorial that was recommended:
-https://bodowinter.com/tutorial/bw_LME_tutorial1.pdf
-https://bodowinter.com/tutorial/bw_LME_tutorial2.pdf
-
-Model assumptions of linearity and homoscedasticity were checked by visually inspecting the fitted versus residual plot. The assumption of normal residuals was visually inspected with a QQplot of the residuals.
-
-*Linearity*
-Because there is no obvious pattern in the residuals, it seems like there is no violation of the linearity assumption.
-```{r}
-plot(pieceM) # this looks quite good
-```
-*Absence of Collinearity*
-If two fixed effects preditors are correlated with each other, they are said to be collinear. 
-Not possible in this case (with factors only, and no reason they should be related)
-
-*Homoskedasticity*
-This doesn't appear obviously heteroscedastic but it isn't perfect either. 
-
-*Normality of residuals* 
-"The	 normality	 of	 residuals	 assumption	 is	 the	 one	 that	 is	 least	 important.	
-Interestingly,	many	people	seem	to	think	it	is	the	most	important	one,	but	it	turns	
-out	that	linear	models	are	relatively	robust	against	violations	of	the	assumptions	
-of	normality.	Researchers	differ	with	respect	to	how	much	weight	they	put	onto	
-checking	this	assumption.	For	example,	Gellman	and	Hill	(2007),	a	 famous	book
-on	linear	models	and	mixed	models,	do	not	even	recommend	diagnostics	of	the	
-normality	assumption	(ibid.	46)."
-
-```{r}
-# The histogram looks skewed with a negative tail.
-hist(residuals(pieceM))
-
-qqnorm(residuals(pieceM))
-
-require(lattice)
-qqmath(pieceM, id=0.05) #id: identifies values that may be exerting undue influence on the model (i.e. outliers)
-```
-
-This model seems fine, however the explanatory variables group and piece aren't really related linearly simply because group and piece are factors. Therefore you could do a mixed ANOVA instead and check the assumptions there.
-
-### Pairwise comparisons
-There were significant main effects of group, X2(1) = 7.70, p = .006, and piece, X2(2) = 18.13, p .0001, on musical absorption. However there was no significant interaction effect between group and piece, X2(2) = .09, p = .95. Pairwise comparisons were conducted with estimated marginal means and indicated that musical absorption was greater for the live than the livestreaming audience, b = .41, t(145) = 2.71, p = .0075, and during folk than during Beethoven, b = .39, t(240) = 4.08, p = .0002, and Schnittke, b = .31, t(237) = 3.26, p = .003. 
-```{r}
-emmeans(pieceM, pairwise ~ piece) # estimated marginal means
-# comparison: Absorption is greater in Folk than in Beethoven or Schnittke
-emmeans(pieceM, pairwise ~ group) # estimated marginal means
-# comparison: Absorption was greater for the live group than the livestreaming group.
-```
-
 ## Mixed ANOVA
 ```{r}
 dat<-df.full%>%select(Pt_ID, group,contains("Absorption"))
@@ -1497,86 +1301,12 @@ colours_DSQ<-c("#2d769a","#b34036")
 
 #update group label
 data$group<-factor(data$group, levels = c("Live", "Virtual"), labels = c("Live", "Livestreaming"))
-
-# BOXPLOT
-data%>%ggplot(aes(x = group, y = Absorption, fill = group))+
-geom_boxplot()+
-facet_grid(cols = vars(piece))+
-labs(title = "Effect of Piece and Group on Absorption",y = "Absorption Score", x = "")+
-scale_fill_manual(values= colours_DSQ, name = "Concert Group")+
-theme_DSQ()+
-theme(legend.position='None')
-
-graphname<-paste0("../plots/Absorption-by-piece-Group.png")
-ggsave(graphname, width = 15, height = 10, units = 'cm', dpi = 500)
-
-## DOTPLOT
-dot<-ggdotplot(data, x = "group", y = "Absorption", fill = "group", facet.by = "piece", add = "mean_sd")+
-  labs(title = "Effect of Group and Piece on Absorption",y = "Absorption Score", x = "")+
-  scale_fill_manual(values = colours_DSQ, name = "Concert Group")+
-  theme_DSQ()+
-  theme(legend.position='None')
-
-dot
-
-graphname<-paste0("../plots/Absorption-by-piece-Group_dot.png")
-ggsave(graphname,
-width = 17,
-height = 10,
-units = 'cm',
-dpi = 500)
-
-## DOTPLOT
-dot<-ggdotplot(data, x = "group", y = "Absorption", fill = "group", facet.by = "piece", add = "mean_sd")+
-  labs(title = "Effect of Group on Absorption",y = "Absorption Score", x = "")+
-  scale_fill_manual(values = colours_DSQ, name = "Concert Group")+
-  theme_DSQ()+
-  theme(legend.position='None')
-
-dot
-
-# I don't want to add the pwc sig anymore because there was no interaction. 
-pwc<-pwc%>%add_xy_position(x = "group")
-pwc$y.position<-pwc$y.position+.3
-
-# add significance value to plot
-dot+stat_pvalue_manual(pwc, hide.ns = TRUE)#, label = "p.adj.signif")
-
-graphname<-paste0("../plots/Absorption-by-piece-Group_dot.png")
-ggsave(graphname,
-width = 17,
-height = 10,
-units = 'cm',
-dpi = 500)
-
-## To represent that there was only a main effect of group, I should average across pieces and only show the group difference. 
-## DOTPLOT
-group<-data%>%select(group, Pt_ID)%>%unique()
-avg<-data%>%group_by(Pt_ID)%>%summarise(Absorption = mean(Absorption))%>%full_join(group,by = "Pt_ID")
-
-dot<-ggdotplot(avg, x = "group", y = "Absorption", fill = "group", add = "mean_sd")+
-  labs(title = "Effect of Group on Absorption",y = "Absorption Score", x = "")+
-  scale_fill_manual(values = colours_DSQ, name = "Concert Group")+
-  theme_minimal()+
-  theme(legend.position='None')+
-  # add significance value to plot
-  geom_signif(comparisons = list(c("Live", "Livestreaming")),
-              annotation = "*", vjust = .5)
-
-dot
-
-graphname<-paste0("../plots/Absorption-by-Group_dot.png")
-ggsave(graphname,
-width = 8,
-height = 10,
-units = 'cm',
-dpi = 500)
 ```
 
 #### Effect of group on Absorption dotplot
-Try making a visualization where it is faceted by group so you show each piece separately on either side of a facet, then edit the image in powerpoint to show the significant group difference across facets. 
+Make a visualization where it is faceted by group so you show each piece separately on either side of a facet, then edit the image in powerpoint to show the significant group difference across facets. 
 
-This is the figure included in the manuscript.
+This is figure 2 included in the manuscript.
 
 ```{r}
 ## DOTPLOT  - facet by group
@@ -1594,146 +1324,6 @@ ggsave(graphname, width = 17, height = 10, units = 'cm', dpi = 500)
 ```
 
 # 3.5.2 Mind-Wandering ~ Group & Piece
-## Linear mixed effects modeling
-1) Organize the data
-```{r}
-# Organize data
-
-dat<-df.full%>%select(Pt_ID, group,contains("Mind-wandering"))
-
-df.long<-dat%>%pivot_longer(!c(group, Pt_ID), #make long
-                            names_to = c("piece"),
-                            names_pattern ="_(.*)",
-                            values_to = "Mindwandering")
-
-df.long<-df.long%>%filter(! piece == "Bach")
-
-
-df.long$piece<-factor(df.long$piece, levels = c("Beethoven", "Schnittke", "Bach", "Folk"))
-#factor for the correct facet order
-
-data<-df.long%>%drop_na() #408 to 359
-```
-
-### Outliers
-```{r}
-outliers<-data %>%
-  group_by(group, piece) %>%
-  identify_outliers(Mindwandering)
-
-outliers # 9; 5 are extreme.
-
-extreme<-outliers%>%filter(is.extreme == TRUE)
-
-extreme # 5 are extreme
-
-# remove specific instances that are outliers (Pt_ID and piece, because lme can handle missing data so you don't need to remove the whole participant)
-
-# data uten outliers
-data_u_outliers<-data%>% # 359 to 350 : looks good!
-  group_by(group, piece) %>%
-  filter(!is_outlier(Mindwandering))%>%
-  ungroup()
-
-# data uten extreme  
-data_u_extreme<-data%>% # 359 to 354 : looks good!
-  group_by(group, piece) %>%
-  filter(!is_extreme(Mindwandering))%>%
-  ungroup()
-```
-
-### Model testing
-Random intercept of participant
-```{r}
-## With lme4
-baseline<-lmer(Mindwandering ~ 1 + (1|Pt_ID), data = data, REML = FALSE) # ML = maximum likelihood estimate
-groupM<-lmer(Mindwandering ~ group + (1|Pt_ID), data = data, REML = FALSE) # ML = maximum likelihood estimate
-pieceM<-lmer(Mindwandering ~ group + piece + (1|Pt_ID), data = data, REML = FALSE) # ML = maximum likelihood estimate
-piece_x_groupM<-lmer(Mindwandering ~ group * piece + (1|Pt_ID), data = data, REML = FALSE) # ML = maximum likelihood estimate
-anova(baseline, groupM, pieceM, piece_x_groupM)
-
-##Refit with only sig effects
-baseline<-lmer(Mindwandering ~ 1 + (1|Pt_ID), data = data, REML = FALSE) # ML = maximum likelihood estimate
-pieceM<-lmer(Mindwandering ~ piece + (1|Pt_ID), data = data, REML = FALSE) # ML = maximum likelihood estimate
-groupM<-lmer(Mindwandering ~ group + piece + (1|Pt_ID), data = data, REML = FALSE) # ML = maximum likelihood estimate
-piece_x_groupM<-lmer(Mindwandering ~ group * piece + (1|Pt_ID), data = data, REML = FALSE) # ML = maximum likelihood estimate
-anova(baseline, pieceM,groupM, piece_x_groupM)
-```
-
-There was a significant main effect of piece, χ2(2) = 59.2, p < .0001, however there was no significant effect of group, χ2(1) = 3.07, p = .080, or interaction between piece and group, χ2(2) = 2.82, p = .24, on musical absorption.
-
-Try without extreme outliers.
-Including or excluding the extreme outliers did not change the model assumptions being satisfied nor did it change the significance of the main effect, therefore the extreme outliers were retained for this analysis.
-```{r}
-##Refit with only sig effects
-baseline<-lmer(Mindwandering ~ 1 + (1|Pt_ID), data = data_u_extreme, REML = FALSE) # ML = maximum likelihood estimate
-pieceM<-lmer(Mindwandering ~ piece + (1|Pt_ID), data = data_u_extreme, REML = FALSE) # ML = maximum likelihood estimate
-groupM<-lmer(Mindwandering ~ group + piece + (1|Pt_ID), data = data_u_extreme, REML = FALSE) # ML = maximum likelihood estimate
-piece_x_groupM<-lmer(Mindwandering ~ group * piece + (1|Pt_ID), data = data_u_extreme, REML = FALSE) # ML = maximum likelihood estimate
-anova(baseline, pieceM,groupM, piece_x_groupM)
-```
-
-
-There were significant main effects of group, X2(1) = 7.70, p = .006, and piece, X2(2) = 18.13, p .0001, on musical absorption. However there was no significant interaction effect between group and piece, X2(2) = .09, p = .95.
-
-#### Check model assumptions
-What are the assumptions of lme and how to check them?
-They are the same as linear regression in general and include:
-1) explanatory variables are related linearly to the response. In my case, my vars are not continuous and thus maybe a mixed anova would be better for explaining things anyways. However it is OK to dummy code and do a multilevel modeling approach.
-2) errors have a constant variance
-3) errors are independent
-4) errors are normally distributed
-
-"check the assumptions that the 1) errors are normally distributed and that the 2) random effects are normally distributed"
-
-Here is a tutorial that was recommended:
-https://bodowinter.com/tutorial/bw_LME_tutorial1.pdf
-https://bodowinter.com/tutorial/bw_LME_tutorial2.pdf
-
-Model assumptions of linearity and homoscedasticity were checked by visually inspecting the fitted versus residual plot. The assumption of normal residuals was visually inspected with a QQplot of the residuals. Even without excluding the 5 extreme outliers, the model looked like it satisfied all assumptions.
-
-Including or excluding the extreme outliers did not change the model assumptions being satisfied nor did it change the significance of the main effect, therefore the extreme outliers were retained for this analysis.
-
-*Linearity*
-Because there is no obvious pattern in the residuals, it seems like there is no violation of the linearity assumption.
-```{r}
-plot(pieceM) # this looks quite good
-```
-*Absence of Collinearity*
-If two fixed effects preditors are correlated with each other, they are said to be collinear. 
-Not possible in this case (with factors only, and no reason they should be related)
-
-*Homoskedasticity*
-This doesn't appear obviously heteroscedastic but it isn't perfect either. 
-
-*Normality of residuals* 
-"The	 normality	 of	 residuals	 assumption	 is	 the	 one	 that	 is	 least	 important.	
-Interestingly,	many	people	seem	to	think	it	is	the	most	important	one,	but	it	turns	
-out	that	linear	models	are	relatively	robust	against	violations	of	the	assumptions	
-of	normality.	Researchers	differ	with	respect	to	how	much	weight	they	put	onto	
-checking	this	assumption.	For	example,	Gellman	and	Hill	(2007),	a	 famous	book
-on	linear	models	and	mixed	models,	do	not	even	recommend	diagnostics	of	the	
-normality	assumption	(ibid.	46)."
-
-```{r}
-# The histogram looks good
-hist(residuals(pieceM))
-
-qqnorm(residuals(pieceM)) # good
-
-require(lattice)
-qqmath(pieceM, id=0.05) #id: identifies values that may be exerting undue influence on the model (i.e. outliers)
-```
-
-This model seems fine, however the explanatory variables group and piece aren't really related linearly simply because group and piece are factors. Therefore you could do a mixed ANOVA instead and check the assumptions there.
-
-### Pairwise comparisons
-There was a significant main effect of piece, χ2(2) = 59.2, p < .0001, however there was no significant effect of group, χ2(1) = 3.07, p = .080, or interaction between piece and group, χ2(2) = 2.82, p = .24, on mind-wandering. Pairwise comparisons were conducted with estimated marginal means and indicated that mind-wandering was greater during the Beethoven than the Schnittke, b = .41, t(236) = 5.09, p < .0001,  or the Folk, b = .65, t(237) = 8.06, p <.0001, and greater during the Schnittke than the Folk, b = .24, t(234) = 2.99, p = .0087.
-```{r}
-emmeans(pieceM, pairwise ~ piece) # estimated marginal means
-# comparison: Absorption is greater in Folk than in Beethoven or Schnittke
-```
-
 
 ## Mixed ANOVA
 
@@ -2576,7 +2166,6 @@ data_u_extreme<-data_u_extreme%>% # 232 to 231 : looks good!
   ungroup()
 ```
 
-
 ### Fit model
 ```{r}
 baseline<-lmer(Absorption ~ 1 +(1|Pt_ID), data = data, REML = FALSE) 
@@ -2588,7 +2177,8 @@ anova(baseline, pieceM, stillM, intxnM)
 stillM<-lmer(Absorption ~ 1 + Stilling + (1|Pt_ID), data = data, REML = FALSE) #NS
 anova(baseline, stillM) 
 ```
-### Try without extreme
+
+#### Without extreme
 Extreme = < Q1 - 3* IQR or > Q3 + 3* IQR
 ```{r}
 baseline<-lmer(Absorption ~ 1 +(1|Pt_ID), data = data_u_extreme, REML = FALSE) 
@@ -2601,8 +2191,7 @@ stillM<-lmer(Absorption ~ 1 + Stilling + (1|Pt_ID), data = data_u_extreme, REML 
 anova(baseline, stillM) #NS
 ```
 
-### Random slope of stilling as well
-#### Fit model
+#### Random slope
 ```{r}
 baseline<-lmer(Absorption ~ 1 +(1+Stilling|Pt_ID), data = data, REML = FALSE) 
 pieceM<-lmer(Absorption ~ 1 + piece + (1+Stilling|Pt_ID), data = data, REML = FALSE) # sig
@@ -2613,7 +2202,8 @@ anova(baseline, pieceM, stillM, intxnM)
 stillM<-lmer(Absorption ~ 1 + Stilling + (1+Stilling|Pt_ID), data = data, REML = FALSE) #MODEL FAILED TO CONVERGE
 anova(baseline, stillM) 
 ```
-#### Try without extreme
+
+#### Random slope Without extreme
 Extreme = < Q1 - 3* IQR or > Q3 + 3* IQR
 ```{r}
 baseline<-lmer(Absorption ~ 1 +(1+Stilling|Pt_ID), data = data_u_extreme, REML = FALSE) # is singular
@@ -2703,7 +2293,7 @@ ggsave(graphname, width = 15, height = 10, units = 'cm', dpi = 500)
 ## 3.6.3 Perceived movement
 5. What is the relation between absorption and perceived movement of self and others as well as quantified movement of self and other?
 
-Mixed ANOVA approach
+lme4 apprach because missing data in some cells is preventing the mixed ANOVA method from working. 
 
 NOTE: the “perceived movement” responses were not continuous, but some were ordinal and some were categorical.Therefore, I should not use methods that rely on continuous data. 
 
@@ -2834,11 +2424,11 @@ df_move_abs%>%
 ```
 
 ### Test: Rmcorr
-Finn suggests I should run a rank U test to examine whether there were differing absorption levels across different response options. There should be a categorical distinction between not aware and aware.
+Finn suggests I could run a rank U test to examine whether there were differing absorption levels across different response options. There is a categorical distinction between not aware and aware.
 
 Absorption and Awareness are repeated measures therefore a Mann-Whitney U test is actually not what we need. 
 
-Is there a relation between awareness and absorption? Repeated measures correlation with Spearman would be able to assess this. I don't think that rmcorr can be changed to be used with spearman but I can just try to see if there is an observed correlation 
+Is there a relation between awareness and absorption? Repeated measures correlation with Spearman would be able to assess this. I don't think that rmcorr can be changed to be used with Spearman but I can just try to see if there is an observed correlation 
 ```{r}
 # aware body: NS
 rmc<-rmcorr(Pt_ID, aware_body_n,Absorption, df_move_abs)
@@ -3092,66 +2682,6 @@ movement_pieceM<-lmer(Absorption ~ group + piece*aware_others_moving_n + (1+awar
 anova(baseline, pieceM, groupM, movementM, movement_groupM) # NS
 anova(baseline, pieceM, groupM, movementM, movement_pieceM) # slightly more significant than the random intercept model
 ```
-### Test: Mixed ANOVA 
-This approach does not seem to work because of lack of data in some cells.
-
-3-way mixed ANOVA
-Outcome/Dependent variable= Absorption
-Repeated measure/within subjects: piece, awareness
-Between subjects: group
-```{r}
-aov.dat %>%
-  select(Pt_ID,group, piece, aware_body_f, aware_movement_f,aware_others_moving_f, Absorption)%>%
-  group_by(piece, group,aware_body_f) %>%
-  identify_outliers(Absorption) # there are no extreme outliers
-
-aov.dat %>%
-  select(Pt_ID,group, piece, aware_body_f, aware_movement_f,aware_others_moving_f, Absorption)%>%
-  group_by(piece, group,aware_movement_f) %>%
-  identify_outliers(Absorption) # there is one extreme outlier
-
-#aov.dat %>%
-#  select(Pt_ID,group, piece, aware_body_f, aware_movement_f,aware_others_moving_f, Absorption)%>%
-#  group_by(piece, group, aware_body_f) %>%
-#  shapiro_test(Absorption) # the test would not run because sample size was less than 3 in some cells. 
-
-## even tho normality was violated, the shapiro test is sensitive at higher sample sizes therefore visual inspection of the qqplot is preferred
-ggqqplot(aov.dat, "Absorption", ggtheme = theme_bw()) +
-  facet_grid(piece + group ~ aware_body_f)
-
-ggqqplot(aov.dat, "Absorption", ggtheme = theme_bw()) +
-  facet_grid(piece + group ~ aware_movement_f) # 2 cells with only one data point
-
-ggqqplot(aov.dat, "Absorption", ggtheme = theme_bw()) +
-  facet_grid(piece + group ~ aware_others_moving_f) # many  cells with only one data point
-
-# homogeneity of variances - satisfied
-aov.dat %>%
-  select(Pt_ID,group, piece, aware_body_f, aware_movement_f,aware_others_moving_f, Absorption)%>%
-  group_by(piece) %>%
-  levene_test(Absorption ~ group*aware_body_f)
-
-# homogeneity of covariances - satisfied
-box_m(aov.dat[, "Absorption", drop = FALSE], aov.dat$group)
-
-## Test
-
-# this does not run because of the missing data. 
-#res.aov<-anova_test(data = aov.dat, dv = Absorption, wid = Pt_ID, within = c(piece, aware_body_f), between = group)
-
-# try with aware_movement - does not work
-# res.aov<-anova_test(data = aov.dat, dv = Absorption, wid = Pt_ID, within = c(piece, aware_movement_f), between = group)
-
-# try with aware_others_moving - does not work
-# res.aov<-anova_test(data = aov.dat, dv = Absorption, wid = Pt_ID, within = c(piece, aware_others_moving_f), between = group)
-
-#get_anova_table(res.aov)
-```
-
-
-An ANCOVA Approach does not work because there is no var for repeated measures. Multilevel modeling with lme4 is necessary. 
-
-
 
 No extreme
 ```{r}
